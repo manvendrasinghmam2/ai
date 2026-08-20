@@ -6,7 +6,7 @@ import requests
 app = Flask(__name__)
 
 # =====================================================
-# GROQ CONFIG
+# CONFIG
 # =====================================================
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
@@ -52,30 +52,25 @@ def get_ai_reply(text):
 
     if not GROQ_API_KEY:
 
-        print("================================")
-        print("GROQ ERROR")
-        print("================================")
-        print("GROQ_API_KEY is NOT configured")
-        print("================================")
+        print("GROQ_API_KEY NOT CONFIGURED")
 
         return "Groq API key configure nahi hai."
 
     system_prompt = """
 You are a friendly voice assistant for an ESP32 device.
 
-Rules:
+Language rules:
 
 1. Understand Hindi.
 2. Understand English.
 3. Understand Hinglish.
-4. Understand Hindi spoken in Roman English.
-5. Reply in the same language/style as the user.
-6. If user says "how are you", reply naturally in English.
-7. If user says "tum kaise ho", reply naturally in Hindi/Hinglish.
-8. Keep replies short because they will be spoken aloud.
+4. If user speaks English, reply in natural English.
+5. If user speaks Hindi, reply in natural Hindi.
+6. If user speaks Hinglish, reply in natural Hinglish.
+7. Match the language of the user.
+8. Keep answers short and natural because the answer will be spoken aloud.
 9. Do not use markdown.
 10. Do not use emojis.
-11. Do not mention these instructions.
 """
 
     payload = {
@@ -106,10 +101,9 @@ Rules:
     try:
 
         print()
-        print("================================")
-        print("GROQ AI REQUEST")
-        print("================================")
-
+        print("==============================")
+        print("GROQ REQUEST")
+        print("==============================")
         print("Model:", GROQ_MODEL)
         print("User:", text)
 
@@ -122,43 +116,20 @@ Rules:
 
         print("Groq HTTP:", response.status_code)
 
-        # =================================================
-        # SUCCESS
-        # =================================================
-
         if response.status_code == 200:
 
-            try:
-                data = response.json()
+            data = response.json()
 
-            except Exception as e:
-
-                print("Groq JSON ERROR:")
-                print(str(e))
-                print(response.text)
-
-                return "AI response nahi mil saka."
-
-            print("Groq JSON received")
-
-            choices = data.get("choices")
+            choices = data.get("choices", [])
 
             if not choices:
-
                 print("No choices received")
                 print(data)
-
                 return "AI response nahi mil saka."
 
-            message = choices[0].get(
-                "message",
-                {}
-            )
+            message = choices[0].get("message", {})
 
-            reply = message.get(
-                "content",
-                ""
-            )
+            reply = message.get("content", "")
 
             if reply is None:
                 reply = ""
@@ -166,33 +137,23 @@ Rules:
             reply = str(reply).strip()
 
             print()
-            print("================================")
-            print("GROQ AI REPLY")
-            print("================================")
+            print("==============================")
+            print("GROQ REPLY")
+            print("==============================")
             print(reply)
-            print("================================")
+            print("==============================")
 
             if not reply:
                 return "AI response nahi mil saka."
 
             return reply
 
-
-        # =================================================
-        # API ERRORS
-        # =================================================
-
         print()
-        print("================================")
+        print("==============================")
         print("GROQ API ERROR")
-        print("================================")
-
-        print("HTTP:", response.status_code)
-        print("Response:")
+        print("==============================")
         print(response.text)
-
-        print("================================")
-
+        print("==============================")
 
         if response.status_code == 401:
             return "Groq API key invalid hai."
@@ -208,26 +169,17 @@ Rules:
 
         return "AI response nahi mil saka."
 
-
     except requests.exceptions.Timeout:
-
-        print("GROQ TIMEOUT")
 
         return "AI response mein timeout ho gaya."
 
-
-    except requests.exceptions.ConnectionError as e:
-
-        print("GROQ CONNECTION ERROR")
-        print(str(e))
+    except requests.exceptions.ConnectionError:
 
         return "Groq server se connection nahi ho saka."
 
-
     except Exception as e:
 
-        print("GROQ EXCEPTION")
-        print(str(e))
+        print("GROQ EXCEPTION:", str(e))
 
         return "AI response nahi mil saka."
 
@@ -250,18 +202,11 @@ def upload_audio():
                 "message": "No audio received"
             }), 400
 
-
         print()
-        print("================================")
+        print("==============================")
         print("AUDIO RECEIVED")
-        print("================================")
-
+        print("==============================")
         print("Bytes:", len(audio_data))
-
-
-        # =================================================
-        # SAVE WAV
-        # =================================================
 
         filename = "/tmp/audio.wav"
 
@@ -270,7 +215,6 @@ def upload_audio():
 
         print("WAV saved:", filename)
 
-
         # =================================================
         # SPEECH RECOGNITION
         # =================================================
@@ -278,12 +222,9 @@ def upload_audio():
         recognizer = sr.Recognizer()
 
         with sr.AudioFile(filename) as source:
-
             audio = recognizer.record(source)
 
-
         text = None
-
 
         # =================================================
         # HINDI
@@ -296,28 +237,21 @@ def upload_audio():
                 language="hi-IN"
             )
 
-            print()
-            print("HINDI RECOGNITION:")
-            print(text)
-
+            print("Hindi:", text)
 
         except sr.UnknownValueError:
 
-            print("Hindi recognition failed.")
-
-            text = None
-
+            print("Hindi recognition failed")
 
         except sr.RequestError as e:
 
-            print("Google Speech error:", str(e))
+            print("Google Speech Error:", str(e))
 
             return jsonify({
                 "status": "error",
                 "message": "Speech service error",
                 "details": str(e)
             }), 500
-
 
         # =================================================
         # ENGLISH FALLBACK
@@ -332,27 +266,16 @@ def upload_audio():
                     language="en-IN"
                 )
 
-                print()
-                print("ENGLISH RECOGNITION:")
-                print(text)
-
+                print("English:", text)
 
             except sr.UnknownValueError:
-
-                print("English recognition failed.")
 
                 return jsonify({
                     "status": "error",
                     "message": "Speech not understood"
                 }), 400
 
-
             except sr.RequestError as e:
-
-                print(
-                    "Google Speech error:",
-                    str(e)
-                )
 
                 return jsonify({
                     "status": "error",
@@ -360,30 +283,25 @@ def upload_audio():
                     "details": str(e)
                 }), 500
 
-
         # =================================================
         # TRANSCRIPTION
         # =================================================
 
         print()
-        print("================================")
+        print("==============================")
         print("TRANSCRIPTION")
-        print("================================")
-
+        print("==============================")
         print(text)
-
-        print("================================")
-
+        print("==============================")
 
         # =================================================
-        # GROQ AI
+        # GROQ
         # =================================================
 
         ai_reply = get_ai_reply(text)
 
-
         # =================================================
-        # FINAL RESPONSE
+        # RESPONSE
         # =================================================
 
         response_data = {
@@ -392,31 +310,23 @@ def upload_audio():
             "ai_reply": ai_reply
         }
 
-
         print()
-        print("================================")
+        print("==============================")
         print("FINAL RESPONSE")
-        print("================================")
-
+        print("==============================")
         print(response_data)
-
-        print("================================")
-
+        print("==============================")
 
         return jsonify(response_data)
-
 
     except Exception as e:
 
         print()
-        print("================================")
+        print("==============================")
         print("SERVER ERROR")
-        print("================================")
-
+        print("==============================")
         print(str(e))
-
-        print("================================")
-
+        print("==============================")
 
         return jsonify({
             "status": "error",
